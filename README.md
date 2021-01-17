@@ -1,0 +1,2 @@
+# NEP_Analysis
+Here is the raw data and R Markdown document used to recreate the analyses in our NEP paper. The data originates from students participating in the project “Biology up close” which takes place within an external laboratory for high school classes in Ostwestfalen-Lippe, Germany. To measure environmental attitude, a German translation of the revised “New Ecological Paradigm Scale” (NEP) was used.
