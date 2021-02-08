@@ -1,0 +1,295 @@
+---
+title: "Predispositions define a pro-environmental attitude"
+author: "Mario Schmiedebach & Vivienne Litzke"
+output:
+  pdf_document:
+    toc: FALSE
+    df_print: kable
+  html_document:
+    df_print: paged
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstract
+The awareness of pressing environmental issues such as climate change, pollution and deforestation – all anthropogenic effects – has tremendously increased during the last few years. Recently initiated by Swedish climate activist Greta Thunberg, both students and the general public demand political changes to find immediate solutions to combat the destruction of our planet. It has been suggested that pro-environmental attitude strongly depends on sociodemographic factors and cultural context. In our study, we investigated the relationship between gender, age, education level, pro-environmental behavior (Fridays for Future movement participation) and environmental attitude in 222 high-school students in the region Ostwestfalen-Lippe in Germany. We found significant relationships between all assessed factors and environmental attitude. Our results suggest influential implications in the field of environmental attitude research by using predisposition data to create effective programs about environmental awareness in school.
+
+# Preface
+
+This is an R Markdown document that will be used to recreate the analyses in our NEP paper. It is recommended to download or clone the Rmarkdown file and data from the accompanying [GitHub repository](https://github.com/vlitzke) to access the documentation together with all the files that are needed to repeat analyses shown in this document. Just click on the link above and then on the green box `Clone or download`. In order to function properly, the same structure of folders must be kept. If you have any questions, do not hesitate to contact vivienne.litzke@gmail.com.
+
+The data originates from students participating in the project “Biology up close” which takes place within an external laboratory at Bielefeld University for high school classes in Ostwestfalen-Lippe, Germany.[^1] The project offers multiple workshops varying from marine biology, bionics, photosynthesis and enzymatic reactions. 
+
+To measure environmental attitude, a German translation of the revised “New Ecological Paradigm Scale” (NEP) was used and calculated as the average score from the 15 NEP items.[^2] Furthermore, students were asked if they participated in the FFF-movement to measure pro-ecological behavior. Finally, school type, gender and age were recorded.
+
+[^1]: Wegner, C., & Strehlke, F. (2015). The Benefits of the German Science Project ‘Biology Up Close’. Nordic Studies in Science Education, 11, 304–312. https://doi.org/10.5617/nordina.902
+
+[^2]: Schleyer-Lindenmann, A., Ittner, H., Dauvier, B., & Piolat, M. (2018). Die NEP-Skala – hinter den (deutschen) Kulissen des Umweltbewusstseins. Diagnostica, 64, 156–167. https://doi.org/10.1026/0012-1924/a000202
+
+\pagebreak
+
+# Download packages and libraries
+
+In order to repeat analyses, a number of packages that extend the functionalities of base `R` are required. These can be installed using the code shown below. 
+
+```{r, install packages, eval=FALSE}
+install.packages("readxl")
+install.packages("dplyr") 
+install.packages("tidyr")
+install.packages("ggplot2")
+install.packages("ggpubr")
+```
+
+Load the packages.
+```{r, load packages, message=FALSE, warning=FALSE}
+library(readxl)
+library(car)
+library(dplyr) 
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+```
+
+# Working with the Raw Data
+
+First we have to open the file. 
+```{r, opendata, message=FALSE, warning=FALSE}
+data <- read_excel("NEP_Arbeitsdatensatz.xlsx")
+```
+
+Here is what it looks like
+```{r, visualize df, message=FALSE}
+knitr::kable(head(data[1:10, 1:8], "simple"))
+```
+
+There a few things we would like to do to organize our data. For example, some of the students did not answer the questions correctly or at all.
+```{r, organize data, message=FALSE, results="hide"}
+# Replace missing data (coded as 999) with NA and drop rows with NA in Geschlecht and FFF
+data <- na_if(data, 999)
+data <- subset(data,is.na(data$Geschlecht)==FALSE)
+data <- subset(data,is.na(data$FFF)==FALSE)
+data <- subset(data,is.na(data$Alter)==FALSE)
+data <- subset(data,is.na(data$Schulform)==FALSE)
+
+# or to just clear out all NAs from the dataset
+data <- data[complete.cases(data), ]
+
+# Change sex/FFF to a factor to plot 
+data$Geschlecht <- as.factor(data$Geschlecht)
+data$FFF <- as.factor(data$FFF)
+data$Schulform <- as.factor(data$Schulform)
+
+# Drop if Geschlecht is diverse (coded as 3)
+data <- data[!(data$Geschlecht==3),]
+```
+
+Explore the data to check for outliers + strange distribution in NEP-scores
+```{r, explore data, message=FALSE}
+test1 <- ggplot(data = data, aes(x = "", y = NEP_Gesamt)) + 
+  geom_boxplot(color = "#DC0000FF", fill="#DC000099") +
+  theme_minimal() +
+  xlab("") +
+  ylab("NEP Mean Score")
+```
+
+```{r, print test1, out.width = "75%", echo=FALSE, fig.align="center"}
+print(test1)
+```
+
+\newpage
+
+```{r, qqplot, message=FALSE}
+qqPlot(data$NEP_Gesamt)
+```
+On the boxplot we can see two outliers, and in the QQ-Plot, you can see the tail slightly drifting outside the confidence bands on the lefthand corner. For now, we deem this as acceptable and will keep these points. 
+
+\newpage
+
+# Analyses 
+
+## Question 1: Run linear regression to see if age predicts NEP score
+Numerous studies have observed a negative relationship between age and pro-ecological attitude, thus, we hypothesize that pro-environmental attitude decreases as age increases. 
+
+```{r, q1_analysis, message=FALSE}
+# Run basic linear regression
+r <- lm(NEP_Gesamt~Alter, data = data)
+
+summary(r)$coefficients[,1:4] 
+```
+Predict: $\mu_{i} = \beta_{0} + \beta_{1} \cdot age_{i} = 5.25 + (-0.064 \cdot age_{i})$
+
+To explore our model data:
+```{r, explore q1 data, message=FALSE}
+outlierTest(r)
+qqPlot(r, main="QQ Plot")
+leveragePlots(r)
+```
+
+Plot it:
+```{r, q1_plot, message=FALSE, results="hide"}
+# Visualize
+p1 <- ggplot(data, aes(x=Alter, y=NEP_Gesamt)) + 
+  geom_smooth(formula = y ~ x, method = "lm", se=F, colour="black") +
+  geom_point(color = "#00A087FF") +
+  theme_minimal() +
+  xlab("Age") +
+  ylab("NEP Mean Score") +
+  xlim(12, 18) 
+```
+
+```{r, print p1, out.width = "70%", echo=FALSE,fig.align="center"}
+print(p1)
+```
+
+\newpage
+
+## Question 2: Run unpaired t-test on mean NEP score and gender
+
+A plethora of studies have illustrated gender as an influence; women have more positive attitudes towards sustainability, renewability and environmental concern. We hypothesize that females show a higher pro-environmental attitude than males.
+
+```{r, q2_analysis, message=FALSE}
+# Independent 2-group t-test where y is a numeric and x is a binomial factor
+gen_diff <- t.test(NEP_Gesamt ~ Geschlecht, data = data, var.equal = TRUE)
+
+gen_diff$p.value
+gen_diff$estimate
+```
+
+Plot it:
+```{r, q2_plot, message=FALSE, results="hide"}
+p2 <-  ggplot(data, aes(x=Geschlecht, y=NEP_Gesamt, fill=Geschlecht)) + 
+  geom_boxplot(color = c("#8491B4FF", "#91D1C2FF")) +
+  theme_minimal() +
+  scale_fill_manual(values = c("#8491B499", "#91D1C299")) +
+  theme(legend.position = "none") +
+  xlab("Gender") +
+  ylab("NEP Mean Score") +
+  scale_x_discrete(labels=c("1" = "Male", "2" = "Female")) +
+  stat_compare_means(method = "t.test", label =  "p.format", label.x = 1.4)
+```
+
+```{r, print p2, out.width = "70%", echo=FALSE,fig.align="center"}
+print(p2)
+```
+
+\newpage
+
+## Question 3: Run Welch test to look at attitude and school type 
+
+A background in science and the level of completed education plays a role in environmental attitude. As the German education system is complex and consists of distinct types of schooling, we explored environmental attitude in two different school types and hypothesized that Gymnasium students have a higher pro-environmental attitude than Gesamtschule students.
+
+Run Welch test (R's default) as we could not assume homogeneity of variances. 
+```{r, q3_analysis, message=FALSE}
+school_diff <- t.test(NEP_Gesamt ~ Schulform, data = data)
+
+school_diff$p.value
+school_diff$estimate
+```
+
+Plot it:
+```{r, q3_plot, message=FALSE, results="hide"}
+p3 <-  ggplot(data, aes(x=Schulform, y=NEP_Gesamt, fill=Schulform)) + 
+  geom_boxplot(color = c("#3C5488FF", "#F39B7FFF")) +
+  theme_minimal() +
+  scale_fill_manual(values = c("#3C548899", "#F39B7F99")) +
+  theme(legend.position = "none") +
+  xlab("School Type") +
+  ylab("NEP Mean Score") +
+  scale_x_discrete(labels=c("1" = "Gymnasium", "2" = "Gesamtschule")) +
+  stat_compare_means(method = "t.test", label =  "p.format", label.x = 1.4)
+```
+
+```{r, print p3, out.width = "70%", echo=FALSE,fig.align="center"}
+print(p3)
+```
+
+## Question 4: Run unpaired t-test to look for effect of FFF participation 
+
+Actively participating in the Fridays For Future Movement can be seen as exhibiting pro-environmental behavior. As there is a strong relationship between pro-environmental behavior and pro-environmental attitude, we hypothesize that students who participated in the FFF movement show a higher pro-environmental attitude than students who did not participate.
+
+```{r, q4_analysis, message=FALSE}
+FFF_diff <- t.test(NEP_Gesamt ~ FFF, data = data, var.equal = TRUE)
+FFF_diff$p.value
+FFF_diff$estimate
+```
+
+Plot it:
+```{r, q4_plot, message=FALSE, results="hide"}
+p4 <-  ggplot(data, aes(x=FFF, y=NEP_Gesamt, fill=FFF)) + 
+  geom_boxplot(color = c("#E64B35FF", "#4DBBD5FF")) +
+  theme_minimal() +
+  scale_fill_manual(values = c("#E64B3599", "#4DBBD599")) +
+  theme(legend.position = "none") +
+  xlab("FFF Participation") +
+  ylab("NEP Mean Score") +
+  scale_x_discrete(labels=c("1" = "Yes", "2" = "No")) +
+  stat_compare_means(method = "t.test", label =  "p.format", label.x = 1.4)
+```
+
+```{r print p4, out.width = "70%", echo=FALSE,fig.align="center"}
+print(p4)
+```
+
+\newpage
+
+## Create a multiplot that combines all the figures
+```{r, combined, message=FALSE, results="hide"}
+combined_figures <- ggarrange(p1, p2, p3, p4, 
+                              labels = c("A", "B", "C", "D"),
+                              ncol = 2, nrow = 2)
+
+ggsave("combined_figures.png", width = 8, height = 9)
+```
+
+```{r, print combined, fig.height=7, fig.width=6, echo=FALSE}
+print(combined_figures)
+```
+
+## Question 5: Plot the interaction with FFF
+
+As all predictors were significant, we inspected the dataset for between-factor interactions in a subsequent, exploratory step. 
+
+```{r, q5_analysis p1, message=FALSE}
+# Check additive model, assuming the variables are independent
+aov2 <- aov(NEP_Gesamt ~ FFF + Geschlecht, data = data)
+summary(aov2)
+```
+
+```{r, q5_analysis p2, message=FALSE}
+# Run model to check for an interaction effect
+aov2_int <- aov(NEP_Gesamt ~ FFF * Geschlecht, data = data)
+summary(aov2_int)
+```
+```{r, q5_plot, message=FALSE}
+p5 <- ggplot(data, aes(x=FFF, y=NEP_Gesamt, fill=Geschlecht)) + 
+  geom_boxplot(color = c("#8491B4FF", "#91D1C2FF", "#8491B4FF", "#91D1C2FF")) +
+  theme_minimal() +
+  xlab("FFF Participation") +
+  ylab("NEP Mean Score") +
+  scale_fill_manual(name = "Gender", 
+                    labels = c("Male", "Female"), 
+                    values = c("#8491B499", "#91D1C299")) +
+  scale_x_discrete(labels=c("1" = "Yes", "2" = "No")) 
+
+ggsave("interaction.png", width = 4, height = 4)
+```
+
+```{r, print p5, out.width = "65%", echo=FALSE,fig.align="center"}
+print(p5)
+```
+
+# Conclusion
+
+To combat the demise of the planet, becoming environmentally aware is our only prevention method. There is an enormous potential to reach students using appropriate methods in schools to point out the pertinence of ecological responsibility and awareness. Our results alone indicate possible predispositions that could be used to help tailor individualized projects aimed at different genders, age ranges and educational level. As climate change is one of today’s most challenging problems, it is crucial to investigate all possible influential factors and design pragmatic educational interventions to change students’ attitude for good because – to put it in the words of Greta Thunberg – “our house is on fire”. 
+
+\pagebreak
+
+```{r sessioninfo, echo = FALSE}
+sessioninfo::session_info()
+```
