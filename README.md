@@ -1,5 +1,5 @@
 ## R-code for: ‘NEP Analysis'
-#### Vivienne Litzke, Mario Schmiedebac
+#### Vivienne Litzke, Mario Schmiedebach
 
 -----
 
